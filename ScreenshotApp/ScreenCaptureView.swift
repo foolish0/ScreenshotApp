@@ -66,7 +66,18 @@ class ScreenCaptureView: NSView {
             width: rect.width,
             height: rect.height
         )
-        guard let cgImage = CGWindowListCreateImage(flippedRect, .optionOnScreenOnly, kCGNullWindowID, .bestResolution) else { return }
+        window?.orderOut(nil) // 隐藏截图窗口
+        usleep(200000) // 确保屏幕刷新完成
+
+        guard let cgImage = CGWindowListCreateImage(
+            flippedRect,
+            [.optionIncludingWindow],
+            kCGNullWindowID,
+            [.bestResolution]
+        ) else {
+            print("Failed to capture screen content.")
+            return
+        }
         let image = NSImage(cgImage: cgImage, size: rect.size)
         showPreview(image: image, rect: rect)
     }

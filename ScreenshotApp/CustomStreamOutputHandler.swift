@@ -17,7 +17,7 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
-        print("Stream callback triggered")
+        print("Stream callback triggered with type: \(outputType)")
         guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             print("No image buffer available")
             return

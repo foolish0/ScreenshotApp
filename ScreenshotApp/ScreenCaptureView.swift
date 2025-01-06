@@ -67,8 +67,12 @@ class ScreenCaptureView: NSView {
     
     private func captureScreenWithScreenCaptureKit(rect: NSRect) async {
         do {
+            let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as NSString: true]
+            AXIsProcessTrustedWithOptions(options)
             // 获取共享内容
+            print("Requesting shareable content...")
             let shareableContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            print("Available displays: \(shareableContent.displays)")
             
             // 获取当前屏幕
             guard let screen = NSScreen.main else {
@@ -87,12 +91,17 @@ class ScreenCaptureView: NSView {
             config.width = Int(rect.width)
             config.height = Int(rect.height)
             config.pixelFormat = kCVPixelFormatType_32BGRA
+
+            // 限制捕获区域
+            let safeRect = rect.intersection(screen.frame)
             config.sourceRect = CGRect(
-                x: rect.origin.x,
-                y: screen.frame.height - rect.origin.y - rect.height,
-                width: rect.width,
-                height: rect.height
+                x: safeRect.origin.x,
+                y: screen.frame.height - safeRect.origin.y - safeRect.height,
+                width: safeRect.width,
+                height: safeRect.height
             )
+            print("Source rect: \(config.sourceRect)")
+            print("Screen frame: \(screen.frame)")
 
             // 创建内容过滤器
             let contentFilter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
@@ -105,8 +114,23 @@ class ScreenCaptureView: NSView {
             print("Adding stream output")
             try stream.addStreamOutput(outputHandler, type: .screen, sampleHandlerQueue: DispatchQueue.main)
 
+            // check权限
+            let isTrusted = AXIsProcessTrusted()
+            print("Screen recording permission granted: \(isTrusted)")
+            if !AXIsProcessTrusted() {
+                let alert = NSAlert()
+                alert.messageText = "屏幕录制权限未授予"
+                alert.informativeText = "请前往系统设置 > 隐私与安全性 > 屏幕录制，授予应用权限。"
+                alert.addButton(withTitle: "确定")
+                alert.runModal()
+                return
+            }
+            
             // 开始捕获
+            print("Starting stream capture...")
             try await stream.startCapture()
+            print("Content Filter: \(contentFilter)")
+            print("Display: \(display)")
             print("Stream started successfully")
         } catch {
             print("Failed to capture screen: \(error)")

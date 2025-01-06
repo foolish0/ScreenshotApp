@@ -6,6 +6,7 @@
 //
 
 import Cocoa
+import ScreenCaptureKit
 
 class ScreenCaptureView: NSView {
     private var startPoint: NSPoint?
@@ -59,27 +60,57 @@ class ScreenCaptureView: NSView {
     }
 
     private func captureScreen(rect: NSRect) {
-        guard let screen = NSScreen.main else { return }
-        let flippedRect = CGRect(
-            x: rect.origin.x,
-            y: screen.frame.height - rect.origin.y - rect.height,
-            width: rect.width,
-            height: rect.height
-        )
-        window?.orderOut(nil) // 隐藏截图窗口
-        usleep(200000) // 确保屏幕刷新完成
-
-        guard let cgImage = CGWindowListCreateImage(
-            flippedRect,
-            [.optionIncludingWindow],
-            kCGNullWindowID,
-            [.bestResolution]
-        ) else {
-            print("Failed to capture screen content.")
-            return
+        Task {
+            await captureScreenWithScreenCaptureKit(rect: rect)
         }
-        let image = NSImage(cgImage: cgImage, size: rect.size)
-        showPreview(image: image, rect: rect)
+    }
+    
+    private func captureScreenWithScreenCaptureKit(rect: NSRect) async {
+        do {
+            // 获取共享内容
+            let shareableContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            
+            // 获取当前屏幕
+            guard let screen = NSScreen.main else {
+                print("No main screen available")
+                return
+            }
+
+            // 查找目标显示器
+            guard let display = shareableContent.displays.first(where: { $0.displayID == screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID }) else {
+                print("No matching display found")
+                return
+            }
+
+            // 创建捕获配置
+            let config = SCStreamConfiguration()
+            config.width = Int(rect.width)
+            config.height = Int(rect.height)
+            config.pixelFormat = kCVPixelFormatType_32BGRA
+            config.sourceRect = CGRect(
+                x: rect.origin.x,
+                y: screen.frame.height - rect.origin.y - rect.height,
+                width: rect.width,
+                height: rect.height
+            )
+
+            // 创建内容过滤器
+            let contentFilter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+
+            // 创建捕获会话
+            let stream = SCStream(filter: contentFilter, configuration: config, delegate: nil)
+
+            // 添加输出类型为屏幕
+            let outputHandler = CustomStreamOutputHandler(rect: rect)
+            print("Adding stream output")
+            try stream.addStreamOutput(outputHandler, type: .screen, sampleHandlerQueue: DispatchQueue.main)
+
+            // 开始捕获
+            try await stream.startCapture()
+            print("Stream started successfully")
+        } catch {
+            print("Failed to capture screen: \(error)")
+        }
     }
 
     private func showPreview(image: NSImage, rect: NSRect) {

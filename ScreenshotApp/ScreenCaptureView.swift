@@ -229,7 +229,7 @@ class ScreenCaptureView: NSView {
     }
     
     private func drawResizeHandles(rect: NSRect) {
-        let handleSize: CGFloat = 8
+        let handleSize: CGFloat = 10
         let handles = [
             NSRect(x: rect.minX - handleSize/2, y: rect.minY - handleSize/2, width: handleSize, height: handleSize),
             NSRect(x: rect.maxX - handleSize/2, y: rect.minY - handleSize/2, width: handleSize, height: handleSize),
@@ -241,9 +241,17 @@ class ScreenCaptureView: NSView {
             NSRect(x: rect.maxX - handleSize/2, y: rect.midY - handleSize/2, width: handleSize, height: handleSize)
         ]
         
-        NSColor.white.setFill()
+        // 绘制手柄外框和填充
         handles.forEach { handle in
-            NSBezierPath(rect: handle).fill()
+            // 绘制白色填充
+            NSColor.white.setFill()
+            NSBezierPath(roundedRect: handle, xRadius: 2, yRadius: 2).fill()
+            
+            // 绘制深色边框
+            NSColor.darkGray.setStroke()
+            let borderPath = NSBezierPath(roundedRect: handle, xRadius: 2, yRadius: 2)
+            borderPath.lineWidth = 1
+            borderPath.stroke()
         }
     }
     
@@ -277,34 +285,34 @@ class ScreenCaptureView: NSView {
     }
     
     private func getResizeHandle(point: NSPoint, rect: NSRect) -> ResizeHandle {
-        let handleSize: CGFloat = 8
-        let hitArea: CGFloat = 8
+        let handleSize: CGFloat = 10
+        let hitArea: CGFloat = 12
         
         // 检查四个角
-        if NSPointInRect(point, NSRect(x: rect.minX - hitArea, y: rect.minY - hitArea, width: handleSize, height: handleSize)) {
+        if NSPointInRect(point, NSRect(x: rect.minX - hitArea, y: rect.minY - hitArea, width: handleSize + hitArea, height: handleSize + hitArea)) {
             return .bottomLeft
         }
-        if NSPointInRect(point, NSRect(x: rect.maxX - hitArea, y: rect.minY - hitArea, width: handleSize, height: handleSize)) {
+        if NSPointInRect(point, NSRect(x: rect.maxX - hitArea, y: rect.minY - hitArea, width: handleSize + hitArea, height: handleSize + hitArea)) {
             return .bottomRight
         }
-        if NSPointInRect(point, NSRect(x: rect.minX - hitArea, y: rect.maxY - hitArea, width: handleSize, height: handleSize)) {
+        if NSPointInRect(point, NSRect(x: rect.minX - hitArea, y: rect.maxY - hitArea, width: handleSize + hitArea, height: handleSize + hitArea)) {
             return .topLeft
         }
-        if NSPointInRect(point, NSRect(x: rect.maxX - hitArea, y: rect.maxY - hitArea, width: handleSize, height: handleSize)) {
+        if NSPointInRect(point, NSRect(x: rect.maxX - hitArea, y: rect.maxY - hitArea, width: handleSize + hitArea, height: handleSize + hitArea)) {
             return .topRight
         }
         
         // 检查边
-        if NSPointInRect(point, NSRect(x: rect.midX - hitArea, y: rect.minY - hitArea, width: handleSize, height: handleSize)) {
+        if NSPointInRect(point, NSRect(x: rect.midX - hitArea, y: rect.minY - hitArea, width: handleSize + hitArea, height: handleSize + hitArea)) {
             return .bottom
         }
-        if NSPointInRect(point, NSRect(x: rect.midX - hitArea, y: rect.maxY - hitArea, width: handleSize, height: handleSize)) {
+        if NSPointInRect(point, NSRect(x: rect.midX - hitArea, y: rect.maxY - hitArea, width: handleSize + hitArea, height: handleSize + hitArea)) {
             return .top
         }
-        if NSPointInRect(point, NSRect(x: rect.minX - hitArea, y: rect.midY - hitArea, width: handleSize, height: handleSize)) {
+        if NSPointInRect(point, NSRect(x: rect.minX - hitArea, y: rect.midY - hitArea, width: handleSize + hitArea, height: handleSize + hitArea)) {
             return .left
         }
-        if NSPointInRect(point, NSRect(x: rect.maxX - hitArea, y: rect.midY - hitArea, width: handleSize, height: handleSize)) {
+        if NSPointInRect(point, NSRect(x: rect.maxX - hitArea, y: rect.midY - hitArea, width: handleSize + hitArea, height: handleSize + hitArea)) {
             return .right
         }
         

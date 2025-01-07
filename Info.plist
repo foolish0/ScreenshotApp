@@ -22,6 +22,8 @@
 	<string>需要访问麦克风以进行录音。</string>
 	<key>NSCameraUsageDescription</key>
 	<string>需要访问摄像头以实现捕获功能。</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>需要屏幕录制权限来实现截图功能</string>
 	<key>NSApplicationUsesScreenCaptureKit</key>
 	<true/>
 </dict>

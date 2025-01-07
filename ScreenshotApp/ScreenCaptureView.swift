@@ -67,10 +67,14 @@ class ScreenCaptureView: NSView {
     
     private func captureScreenWithScreenCaptureKit(rect: NSRect) async {
         do {
-            // 获取共享内容
-            print("Requesting shareable content...")
-            let shareableContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            print("Available displays: \(shareableContent.displays)")
+            // 使用权限管理器检查权限
+            guard await PermissionManager.shared.checkPermissions() else {
+                print("Screen capture permission not granted")
+                return
+            }
+            
+            // 获取可共享内容
+            let shareableContent = try await SCShareableContent.current
             
             // 获取当前屏幕
             guard let screen = NSScreen.main else {
@@ -112,18 +116,6 @@ class ScreenCaptureView: NSView {
             print("Adding stream output")
             try stream.addStreamOutput(outputHandler, type: .screen, sampleHandlerQueue: DispatchQueue.main)
 
-            // check权限
-            let isTrusted = AXIsProcessTrusted()
-            print("Screen recording permission granted: \(isTrusted)")
-            if !AXIsProcessTrusted() {
-                let alert = NSAlert()
-                alert.messageText = "屏幕录制权限未授予"
-                alert.informativeText = "请前往系统设置 > 隐私与安全性 > 屏幕录制，授予应用权限。"
-                alert.addButton(withTitle: "确定")
-                alert.runModal()
-                return
-            }
-            
             // 开始捕获
             print("Starting stream capture...")
             try await stream.startCapture()

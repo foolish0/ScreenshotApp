@@ -26,5 +26,11 @@
 	<string>需要屏幕录制权限来实现截图功能</string>
 	<key>NSApplicationUsesScreenCaptureKit</key>
 	<true/>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>需要访问桌面文件夹以保存截图。</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>需要访问下载文件夹以保存截图。</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>需要访问文档文件夹以保存截图。</string>
 </dict>
 </plist>

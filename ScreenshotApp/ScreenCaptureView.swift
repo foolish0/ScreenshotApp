@@ -11,11 +11,22 @@ import ScreenCaptureKit
 class ScreenCaptureView: NSView {
     private var startPoint: NSPoint?
     private var currentRect: NSRect?
-    private var currentStream: SCStream? // 保持对 stream 的强引用
-    private var outputHandler: CustomStreamOutputHandler? // 保持对 handler 的强引用
+    private var currentStream: SCStream?
+    private var outputHandler: CustomStreamOutputHandler?
+    private var isDragging = false
+    private var isResizing = false
+    private var dragStartPoint: NSPoint?
+    private var resizeHandle: ResizeHandle = .none
+    private var isSelectionConfirmed = false
+    
+    // 定义调整大小的手柄区域
+    private enum ResizeHandle {
+        case none, topLeft, topRight, bottomLeft, bottomRight
+        case top, bottom, left, right
+    }
     
     override var isOpaque: Bool {
-        return false // 始终返回 false 表示视图是透明的
+        return false
     }
     
     override init(frame: NSRect) {
@@ -27,44 +38,150 @@ class ScreenCaptureView: NSView {
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
+    
     override func mouseDown(with event: NSEvent) {
-        // 记录起始点
-        startPoint = convert(event.locationInWindow, from: nil)
+        let point = convert(event.locationInWindow, from: nil)
+        
+        if let rect = currentRect {
+            // 检查是否点击了确认按钮
+            let buttonWidth: CGFloat = 60
+            let buttonHeight: CGFloat = 24
+            let buttonRect = NSRect(
+                x: rect.maxX - buttonWidth - 10,
+                y: rect.maxY + 10,
+                width: buttonWidth,
+                height: buttonHeight
+            )
+            
+            if NSPointInRect(point, buttonRect) {
+                isSelectionConfirmed = true
+                captureScreen(rect: rect)
+                return
+            }
+            
+            // 检查是否点击了调整大小的手柄
+            resizeHandle = getResizeHandle(point: point, rect: rect)
+            
+            if resizeHandle != .none {
+                isResizing = true
+                dragStartPoint = point
+                return
+            }
+            
+            // 检查是否在选择区域内点击
+            if NSPointInRect(point, rect) {
+                isDragging = true
+                dragStartPoint = point
+                return
+            }
+            
+            // 如果点击在选择区域外，开始新的选择
+            if !isSelectionConfirmed {
+                startPoint = point
+                currentRect = nil
+            }
+        } else {
+            startPoint = point
+        }
     }
-
+    
     override func mouseDragged(with event: NSEvent) {
-        guard let startPoint = startPoint else { return }
-        // 计算拖拽框
         let currentPoint = convert(event.locationInWindow, from: nil)
-        currentRect = NSRect(
-            x: min(startPoint.x, currentPoint.x),
-            y: min(startPoint.y, currentPoint.y),
-            width: abs(currentPoint.x - startPoint.x),
-            height: abs(currentPoint.y - startPoint.y)
-        )
+        
+        if isDragging {
+            // 处理拖动
+            guard let startPoint = dragStartPoint,
+                  var rect = currentRect else { return }
+            
+            let dx = currentPoint.x - startPoint.x
+            let dy = currentPoint.y - startPoint.y
+            rect.origin.x += dx
+            rect.origin.y += dy
+            currentRect = rect
+            dragStartPoint = currentPoint
+            
+        } else if isResizing {
+            // 处理调整大小
+            guard let rect = currentRect,
+                  let startPoint = dragStartPoint else { return }
+            
+            let dx = currentPoint.x - startPoint.x
+            let dy = currentPoint.y - startPoint.y
+            var newRect = rect
+            
+            switch resizeHandle {
+            case .topLeft:
+                newRect.origin.x += dx
+                newRect.size.width -= dx
+                newRect.size.height += dy
+            case .topRight:
+                newRect.size.width += dx
+                newRect.size.height += dy
+            case .bottomLeft:
+                newRect.origin.x += dx
+                newRect.size.width -= dx
+                newRect.origin.y += dy
+                newRect.size.height -= dy
+            case .bottomRight:
+                newRect.size.width += dx
+                newRect.origin.y += dy
+                newRect.size.height -= dy
+            case .top:
+                newRect.size.height += dy
+            case .bottom:
+                newRect.origin.y += dy
+                newRect.size.height -= dy
+            case .left:
+                newRect.origin.x += dx
+                newRect.size.width -= dx
+            case .right:
+                newRect.size.width += dx
+            case .none:
+                break
+            }
+            
+            // 确保宽度和高度不为负
+            if newRect.size.width > 0 && newRect.size.height > 0 {
+                currentRect = newRect
+                dragStartPoint = currentPoint
+            }
+            
+        } else {
+            // 处理新的选择
+            guard let startPoint = startPoint else { return }
+            currentRect = NSRect(
+                x: min(startPoint.x, currentPoint.x),
+                y: min(startPoint.y, currentPoint.y),
+                width: abs(currentPoint.x - startPoint.x),
+                height: abs(currentPoint.y - startPoint.y)
+            )
+        }
+        
         needsDisplay = true
     }
-
+    
     override func mouseUp(with event: NSEvent) {
-        guard let rect = currentRect else { return }
-        captureScreen(rect: rect)
-        currentRect = nil
-        startPoint = nil
+        isDragging = false
+        isResizing = false
+        dragStartPoint = nil
+        
+        if !isSelectionConfirmed {
+            // 只在第一次选择时重置起始点
+            startPoint = nil
+        }
+        
         needsDisplay = true
     }
-
+    
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         
         if let rect = currentRect {
             NSGraphicsContext.current?.saveGraphicsState()
             
-            // 创建遮罩路径
+            // 绘制遮罩
             let path = NSBezierPath(rect: bounds)
             path.append(NSBezierPath(rect: rect).reversed)
-            
-            // 设置遮罩区域的颜色
             NSColor(white: 0, alpha: 0.3).setFill()
             path.fill()
             
@@ -74,14 +191,102 @@ class ScreenCaptureView: NSView {
             borderPath.lineWidth = 2
             borderPath.stroke()
             
+            // 如果已经有选择区域，绘制调整手柄和确认按钮
+            if !isSelectionConfirmed {
+                drawResizeHandles(rect: rect)
+                drawConfirmButton(rect: rect)
+            }
+            
             NSGraphicsContext.current?.restoreGraphicsState()
         } else {
-            // 如果没有选择区域，整个窗口显示半透明遮罩
             NSColor(white: 0, alpha: 0.3).setFill()
             bounds.fill()
         }
     }
-
+    
+    private func drawResizeHandles(rect: NSRect) {
+        let handleSize: CGFloat = 8
+        let handles = [
+            NSRect(x: rect.minX - handleSize/2, y: rect.minY - handleSize/2, width: handleSize, height: handleSize),
+            NSRect(x: rect.maxX - handleSize/2, y: rect.minY - handleSize/2, width: handleSize, height: handleSize),
+            NSRect(x: rect.minX - handleSize/2, y: rect.maxY - handleSize/2, width: handleSize, height: handleSize),
+            NSRect(x: rect.maxX - handleSize/2, y: rect.maxY - handleSize/2, width: handleSize, height: handleSize),
+            NSRect(x: rect.midX - handleSize/2, y: rect.minY - handleSize/2, width: handleSize, height: handleSize),
+            NSRect(x: rect.midX - handleSize/2, y: rect.maxY - handleSize/2, width: handleSize, height: handleSize),
+            NSRect(x: rect.minX - handleSize/2, y: rect.midY - handleSize/2, width: handleSize, height: handleSize),
+            NSRect(x: rect.maxX - handleSize/2, y: rect.midY - handleSize/2, width: handleSize, height: handleSize)
+        ]
+        
+        NSColor.white.setFill()
+        handles.forEach { handle in
+            NSBezierPath(rect: handle).fill()
+        }
+    }
+    
+    private func drawConfirmButton(rect: NSRect) {
+        let buttonWidth: CGFloat = 60
+        let buttonHeight: CGFloat = 24
+        let buttonRect = NSRect(
+            x: rect.maxX - buttonWidth - 10,
+            y: rect.maxY + 10,
+            width: buttonWidth,
+            height: buttonHeight
+        )
+        
+        // 绘制确认按钮
+        NSColor.systemBlue.setFill()
+        let buttonPath = NSBezierPath(roundedRect: buttonRect, xRadius: 4, yRadius: 4)
+        buttonPath.fill()
+        
+        // 绘制按钮文字
+        let text = "确认"
+        let textAttributes: [NSAttributedString.Key: Any] = [
+            .foregroundColor: NSColor.white,
+            .font: NSFont.systemFont(ofSize: 12)
+        ]
+        let textSize = text.size(withAttributes: textAttributes)
+        let textPoint = NSPoint(
+            x: buttonRect.midX - textSize.width/2,
+            y: buttonRect.midY - textSize.height/2
+        )
+        text.draw(at: textPoint, withAttributes: textAttributes)
+    }
+    
+    private func getResizeHandle(point: NSPoint, rect: NSRect) -> ResizeHandle {
+        let handleSize: CGFloat = 8
+        let hitArea: CGFloat = 8
+        
+        // 检查四个角
+        if NSPointInRect(point, NSRect(x: rect.minX - hitArea, y: rect.minY - hitArea, width: handleSize, height: handleSize)) {
+            return .bottomLeft
+        }
+        if NSPointInRect(point, NSRect(x: rect.maxX - hitArea, y: rect.minY - hitArea, width: handleSize, height: handleSize)) {
+            return .bottomRight
+        }
+        if NSPointInRect(point, NSRect(x: rect.minX - hitArea, y: rect.maxY - hitArea, width: handleSize, height: handleSize)) {
+            return .topLeft
+        }
+        if NSPointInRect(point, NSRect(x: rect.maxX - hitArea, y: rect.maxY - hitArea, width: handleSize, height: handleSize)) {
+            return .topRight
+        }
+        
+        // 检查边
+        if NSPointInRect(point, NSRect(x: rect.midX - hitArea, y: rect.minY - hitArea, width: handleSize, height: handleSize)) {
+            return .bottom
+        }
+        if NSPointInRect(point, NSRect(x: rect.midX - hitArea, y: rect.maxY - hitArea, width: handleSize, height: handleSize)) {
+            return .top
+        }
+        if NSPointInRect(point, NSRect(x: rect.minX - hitArea, y: rect.midY - hitArea, width: handleSize, height: handleSize)) {
+            return .left
+        }
+        if NSPointInRect(point, NSRect(x: rect.maxX - hitArea, y: rect.midY - hitArea, width: handleSize, height: handleSize)) {
+            return .right
+        }
+        
+        return .none
+    }
+    
     private func captureScreen(rect: NSRect) {
         Task {
             await captureScreenWithScreenCaptureKit(rect: rect)

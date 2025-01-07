@@ -116,7 +116,7 @@ class ScreenCaptureView: NSView {
             config.width = Int(rect.width)
             config.height = Int(rect.height)
             config.pixelFormat = kCVPixelFormatType_32BGRA
-            config.minimumFrameInterval = CMTime(value: 1, timescale: 1) // 设置最小帧间隔为1秒
+            config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
 
             // 限制捕获区域
             let safeRect = rect.intersection(screen.frame)
@@ -130,6 +130,14 @@ class ScreenCaptureView: NSView {
             // 创建内容过滤器
             let contentFilter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
 
+            // 先隐藏当前窗口
+            await MainActor.run {
+                self.window?.orderOut(nil)
+            }
+            
+            // 等待窗口完全隐藏
+            try await Task.sleep(nanoseconds: 300_000_000) // 0.3秒
+            
             // 停止现有的流（如果有）
             if let currentStream = self.currentStream {
                 try? await currentStream.stopCapture()
@@ -138,23 +146,23 @@ class ScreenCaptureView: NSView {
 
             // 创建新的流
             let stream = SCStream(filter: contentFilter, configuration: config, delegate: nil)
-            self.currentStream = stream // 保持强引用
+            self.currentStream = stream
             
             // 创建并保存输出处理器
             let handler = CustomStreamOutputHandler(rect: rect, captureWindow: self.window)
             self.outputHandler = handler
             
-            // 添加输出处理器
-            print("Adding stream output")
             try stream.addStreamOutput(handler, type: .screen, sampleHandlerQueue: .main)
             
-            // 开始捕获
-            print("Starting stream capture...")
             try await stream.startCapture()
             print("Stream started successfully")
             
         } catch {
             print("Failed to capture screen: \(error.localizedDescription)")
+            // 如果出错，确保窗口重新显示
+            await MainActor.run {
+                self.window?.makeKeyAndOrderFront(nil)
+            }
         }
     }
 

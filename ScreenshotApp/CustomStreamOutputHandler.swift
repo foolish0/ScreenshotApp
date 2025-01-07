@@ -61,7 +61,7 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
         // 创建无标题栏的窗口
         let previewWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height + 40),
-            styleMask: [.borderless], // 使用 borderless 样式去掉标题栏
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -69,10 +69,21 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
         previewWindow.backgroundColor = .windowBackgroundColor
         previewWindow.level = .floating
         previewWindow.center()
-        previewWindow.isMovableByWindowBackground = true // 允许通过拖动窗口背景来移动窗口
+        previewWindow.isMovableByWindowBackground = true
 
-        // 创建一个容器视图来管理布局
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height + 40))
+        // 创建一个完全可拖动的自定义视图
+        class DraggableContainerView: NSView {
+            override var mouseDownCanMoveWindow: Bool { true }
+            
+            override func mouseDown(with event: NSEvent) {
+                if let window = self.window {
+                    window.performDrag(with: event)
+                }
+            }
+        }
+
+        // 使用可拖动的视图作为主容器
+        let containerView = DraggableContainerView(frame: NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height + 40))
         containerView.wantsLayer = true
         containerView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
 

@@ -11,10 +11,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var window: ScreenCaptureWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        checkAndRequestPermission()
         print("Application Did Finish Launching")
         NSApp.setActivationPolicy(.regular) // 确保应用可以显示在 Dock 中
         addMenu()
         startCapture()
+    }
+    
+    private func checkAndRequestPermission() {
+            let isTrusted = AXIsProcessTrusted()
+            print("Screen recording permission state: \(isTrusted)")
+
+            if !isTrusted {
+                let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as NSString: true]
+                AXIsProcessTrustedWithOptions(options)
+
+                showPermissionAlert()
+            } else {
+                print("Screen recording permission granted.")
+            }
+        }
+
+    private func showPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "屏幕录制权限未授予"
+        alert.informativeText = "请前往系统设置 > 隐私与安全性 > 屏幕录制，勾选您的应用以启用屏幕录制权限。"
+        alert.addButton(withTitle: "打开系统设置")
+        alert.addButton(withTitle: "取消")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Library/PreferencePanes/Security.prefPane"))
+        }
     }
     
     func addMenu() {

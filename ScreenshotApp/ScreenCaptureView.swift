@@ -67,8 +67,6 @@ class ScreenCaptureView: NSView {
     
     private func captureScreenWithScreenCaptureKit(rect: NSRect) async {
         do {
-            let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as NSString: true]
-            AXIsProcessTrustedWithOptions(options)
             // 获取共享内容
             print("Requesting shareable content...")
             let shareableContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)

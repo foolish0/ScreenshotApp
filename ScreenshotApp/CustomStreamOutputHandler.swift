@@ -58,36 +58,47 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
     }
 
     private func showPreview(image: NSImage) {
+        // 创建无标题栏的窗口
         let previewWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height + 40),
-            styleMask: [.titled, .closable],
+            styleMask: [.borderless], // 使用 borderless 样式去掉标题栏
             backing: .buffered,
             defer: false
         )
 
-        previewWindow.title = "截图预览"
+        previewWindow.backgroundColor = .windowBackgroundColor
         previewWindow.level = .floating
         previewWindow.center()
+        previewWindow.isMovableByWindowBackground = true // 允许通过拖动窗口背景来移动窗口
 
+        // 创建一个容器视图来管理布局
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height + 40))
+        containerView.wantsLayer = true
+        containerView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+
+        // 图片视图
         let imageView = NSImageView(frame: NSRect(x: 0, y: 40, width: image.size.width, height: image.size.height))
         imageView.image = image
         imageView.imageScaling = .scaleProportionallyUpOrDown
-        previewWindow.contentView?.addSubview(imageView)
+        containerView.addSubview(imageView)
 
+        // 保存按钮
         let saveButton = NSButton(frame: NSRect(x: 10, y: 5, width: 80, height: 30))
         saveButton.title = "保存"
         saveButton.bezelStyle = .rounded
         saveButton.target = self
         saveButton.action = #selector(saveImage)
-        previewWindow.contentView?.addSubview(saveButton)
+        containerView.addSubview(saveButton)
 
+        // 取消按钮
         let cancelButton = NSButton(frame: NSRect(x: 100, y: 5, width: 80, height: 30))
         cancelButton.title = "取消"
         cancelButton.bezelStyle = .rounded
         cancelButton.target = self
         cancelButton.action = #selector(cancelPreview)
-        previewWindow.contentView?.addSubview(cancelButton)
+        containerView.addSubview(cancelButton)
 
+        previewWindow.contentView = containerView
         self.previewWindow = previewWindow
         previewWindow.makeKeyAndOrderFront(nil)
     }

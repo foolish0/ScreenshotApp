@@ -14,10 +14,13 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
 
     init(rect: NSRect) {
         self.rect = rect
+        super.init()
+        print("CustomStreamOutputHandler initialized")
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
         print("Stream callback triggered with type: \(outputType)")
+        
         guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             print("No image buffer available")
             return

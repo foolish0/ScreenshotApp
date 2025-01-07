@@ -11,6 +11,8 @@ import ScreenCaptureKit
 class ScreenCaptureView: NSView {
     private var startPoint: NSPoint?
     private var currentRect: NSRect?
+    private var currentStream: SCStream? // 保持对 stream 的强引用
+    private var outputHandler: CustomStreamOutputHandler? // 保持对 handler 的强引用
     
     override init(frame: NSRect) {
             super.init(frame: frame)
@@ -93,6 +95,7 @@ class ScreenCaptureView: NSView {
             config.width = Int(rect.width)
             config.height = Int(rect.height)
             config.pixelFormat = kCVPixelFormatType_32BGRA
+            config.minimumFrameInterval = CMTime(value: 1, timescale: 1) // 设置最小帧间隔为1秒
 
             // 限制捕获区域
             let safeRect = rect.intersection(screen.frame)
@@ -102,28 +105,35 @@ class ScreenCaptureView: NSView {
                 width: safeRect.width,
                 height: safeRect.height
             )
-            print("Source rect: \(config.sourceRect)")
-            print("Screen frame: \(screen.frame)")
-
+            
             // 创建内容过滤器
             let contentFilter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
 
-            // 创建捕获会话
+            // 停止现有的流（如果有）
+            if let currentStream = self.currentStream {
+                try? await currentStream.stopCapture()
+                self.currentStream = nil
+            }
+
+            // 创建新的流
             let stream = SCStream(filter: contentFilter, configuration: config, delegate: nil)
-
-            // 添加输出类型为屏幕
-            let outputHandler = CustomStreamOutputHandler(rect: rect)
+            self.currentStream = stream // 保持强引用
+            
+            // 创建并保存输出处理器
+            let handler = CustomStreamOutputHandler(rect: rect)
+            self.outputHandler = handler // 保持强引用
+            
+            // 添加输出处理器
             print("Adding stream output")
-            try stream.addStreamOutput(outputHandler, type: .screen, sampleHandlerQueue: DispatchQueue.main)
-
+            try stream.addStreamOutput(handler, type: .screen, sampleHandlerQueue: .main)
+            
             // 开始捕获
             print("Starting stream capture...")
             try await stream.startCapture()
-            print("Content Filter: \(contentFilter)")
-            print("Display: \(display)")
             print("Stream started successfully")
+            
         } catch {
-            print("Failed to capture screen: \(error)")
+            print("Failed to capture screen: \(error.localizedDescription)")
         }
     }
 

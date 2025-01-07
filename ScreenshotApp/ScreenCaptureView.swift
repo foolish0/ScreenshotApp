@@ -33,6 +33,14 @@ class ScreenCaptureView: NSView {
         super.init(frame: frame)
         self.wantsLayer = true
         self.layer?.backgroundColor = .clear
+        
+        // 添加鼠标移动事件跟踪
+        addTrackingArea(NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited],
+            owner: self,
+            userInfo: nil
+        ))
     }
 
     required init?(coder: NSCoder) {
@@ -411,26 +419,24 @@ class ScreenCaptureView: NSView {
     // 添加光标样式相关的方法
     private func updateCursor(for point: NSPoint) {
         if let rect = currentRect {
-            // 获取手柄类型
             let handle = getResizeHandle(point: point, rect: rect)
             
-            // 根据不同的手柄设置不同的光标
             let cursor: NSCursor = {
-            switch handle {
-            case .topLeft, .bottomRight:
-                return NSCursor(image: NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: nil)!,
-                              hotSpot: NSPoint(x: 8, y: 8)) // 使用系统默认光标
-            case .topRight, .bottomLeft:
-                return NSCursor(image: NSImage(systemSymbolName: "arrow.up.right.and.arrow.down.left", accessibilityDescription: nil)!,
-                              hotSpot: NSPoint(x: 8, y: 8))
-            case .top, .bottom:
-                return NSCursor.resizeUpDown
-            case .left, .right:
-                return NSCursor.resizeLeftRight
-            case .none:
-                return NSPointInRect(point, rect) ? NSCursor.openHand : NSCursor.crosshair
-            }
-        }()
+                switch handle {
+                case .topLeft, .bottomRight:
+                    return NSCursor(image: NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: nil)!,
+                                  hotSpot: NSPoint(x: 8, y: 8))
+                case .topRight, .bottomLeft:
+                    return NSCursor(image: NSImage(systemSymbolName: "arrow.up.right.and.arrow.down.left", accessibilityDescription: nil)!,
+                                  hotSpot: NSPoint(x: 8, y: 8))
+                case .top, .bottom:
+                    return NSCursor.resizeUpDown
+                case .left, .right:
+                    return NSCursor.resizeLeftRight
+                case .none:
+                    return NSPointInRect(point, rect) ? NSCursor.openHand : NSCursor.crosshair
+                }
+            }()
             
             if cursor != NSCursor.current {
                 cursor.set()
@@ -479,7 +485,30 @@ class ScreenCaptureView: NSView {
         updateCursor(for: point)
     }
     
+    // 处理鼠标进入视图
+    override func mouseEntered(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        updateCursor(for: point)
+    }
     
+    // 处理鼠标离开视图
+    override func mouseExited(with event: NSEvent) {
+        NSCursor.arrow.set() // 恢复默认光标
+    }
     
-    
+    // 确保在视图大小改变时更新跟踪区域
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        
+        // 移除旧的跟踪区域
+        trackingAreas.forEach { removeTrackingArea($0) }
+        
+        // 添加新的跟踪区域
+        addTrackingArea(NSTrackingArea(
+            rect: NSRect(origin: .zero, size: newSize),
+            options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited],
+            owner: self,
+            userInfo: nil
+        ))
+    }
 }

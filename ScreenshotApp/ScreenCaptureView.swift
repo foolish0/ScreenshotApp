@@ -70,6 +70,8 @@ class ScreenCaptureView: NSView {
             
             // 检查是否在选择区域内点击
             if NSPointInRect(point, rect) {
+                // 更新光标为闭合手
+                NSCursor.closedHand.set()
                 isDragging = true
                 dragStartPoint = point
                 return
@@ -171,6 +173,10 @@ class ScreenCaptureView: NSView {
         }
         
         needsDisplay = true
+        
+        // 重置光标
+        let point = convert(event.locationInWindow, from: nil)
+        updateCursor(for: point)
     }
     
     override func draw(_ dirtyRect: NSRect) {
@@ -179,28 +185,46 @@ class ScreenCaptureView: NSView {
         if let rect = currentRect {
             NSGraphicsContext.current?.saveGraphicsState()
             
-            // 绘制遮罩
+            // 绘制遮罩（添加渐变效果）
             let path = NSBezierPath(rect: bounds)
             path.append(NSBezierPath(rect: rect).reversed)
-            NSColor(white: 0, alpha: 0.3).setFill()
-            path.fill()
             
-            // 绘制选择框边框
-            NSColor.white.setStroke()
+            // 创建渐变遮罩
+            let gradient = NSGradient(colors: [
+                NSColor(white: 0, alpha: 0.5),
+                NSColor(white: 0, alpha: 0.3)
+            ])
+            gradient?.draw(in: path, angle: 45)
+            
+            // 绘制选择框边框（添加发光效果）
             let borderPath = NSBezierPath(rect: rect)
             borderPath.lineWidth = 2
+            
+            // 外发光效果
+            NSColor.white.withAlphaComponent(0.3).setStroke()
+            let glowPath = NSBezierPath(rect: rect.insetBy(dx: -2, dy: -2))
+            glowPath.lineWidth = 4
+            glowPath.stroke()
+            
+            // 主边框
+            NSColor.white.setStroke()
             borderPath.stroke()
             
             // 如果已经有选择区域，绘制调整手柄和确认按钮
             if !isSelectionConfirmed {
                 drawResizeHandles(rect: rect)
                 drawConfirmButton(rect: rect)
+                drawSizeIndicator(rect: rect)
             }
             
             NSGraphicsContext.current?.restoreGraphicsState()
         } else {
-            NSColor(white: 0, alpha: 0.3).setFill()
-            bounds.fill()
+            // 初始状态的遮罩
+            let gradient = NSGradient(colors: [
+                NSColor(white: 0, alpha: 0.5),
+                NSColor(white: 0, alpha: 0.3)
+            ])
+            gradient?.draw(in: bounds, angle: 45)
         }
     }
     
@@ -375,4 +399,79 @@ class ScreenCaptureView: NSView {
         let previewWindow = PreviewWindow(image: image, rect: rect)
         previewWindow.makeKeyAndOrderFront(nil)
     }
+    
+    // 添加光标样式相关的方法
+    private func updateCursor(for point: NSPoint) {
+        if let rect = currentRect {
+            // 获取手柄类型
+            let handle = getResizeHandle(point: point, rect: rect)
+            
+            // 根据不同的手柄设置不同的光标
+            let cursor: NSCursor = {
+            switch handle {
+            case .topLeft, .bottomRight:
+                return NSCursor(image: NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: nil)!,
+                              hotSpot: NSPoint(x: 8, y: 8)) // 使用系统默认光标
+            case .topRight, .bottomLeft:
+                return NSCursor(image: NSImage(systemSymbolName: "arrow.up.right.and.arrow.down.left", accessibilityDescription: nil)!,
+                              hotSpot: NSPoint(x: 8, y: 8))
+            case .top, .bottom:
+                return NSCursor.resizeUpDown
+            case .left, .right:
+                return NSCursor.resizeLeftRight
+            case .none:
+                return NSPointInRect(point, rect) ? NSCursor.openHand : NSCursor.crosshair
+            }
+        }()
+            
+            if cursor != NSCursor.current {
+                cursor.set()
+            }
+        } else {
+            NSCursor.crosshair.set()
+        }
+    }
+    
+    // 修改绘制方法，添加尺寸提示
+    private func drawSizeIndicator(rect: NSRect) {
+        let text = String(format: "%.0f × %.0f", rect.width, rect.height)
+        let textAttributes: [NSAttributedString.Key: Any] = [
+            .foregroundColor: NSColor.white,
+            .font: NSFont.systemFont(ofSize: 12),
+            .backgroundColor: NSColor.black.withAlphaComponent(0.6)
+        ]
+        
+        let textSize = text.size(withAttributes: textAttributes)
+        let padding: CGFloat = 5
+        
+        // 计算文本位置（在选择框的左上角）
+        let textRect = NSRect(
+            x: rect.minX,
+            y: rect.maxY + padding,
+            width: textSize.width + padding * 2,
+            height: textSize.height + padding * 2
+        )
+        
+        // 绘制背景
+        let bgPath = NSBezierPath(roundedRect: textRect, xRadius: 4, yRadius: 4)
+        NSColor.black.withAlphaComponent(0.6).setFill()
+        bgPath.fill()
+        
+        // 绘制文本
+        let textPoint = NSPoint(
+            x: textRect.minX + padding,
+            y: textRect.minY + padding
+        )
+        text.draw(at: textPoint, withAttributes: textAttributes)
+    }
+    
+    // 重写鼠标移动方法来更新光标
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        updateCursor(for: point)
+    }
+    
+    
+    
+    
 }

@@ -11,10 +11,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var window: ScreenCaptureWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("Application Did Finish Launching")
-        NSApp.setActivationPolicy(.regular) // 确保应用可以显示在 Dock 中
+        NSApp.setActivationPolicy(.regular)
         addMenu()
-        startCapture()
+        
+        // 检查权限并启动应用
+        Task {
+            if await PermissionManager.shared.checkPermissions() {
+                DispatchQueue.main.async {
+                    self.startCapture()
+                }
+            }
+        }
     }
     
     func addMenu() {

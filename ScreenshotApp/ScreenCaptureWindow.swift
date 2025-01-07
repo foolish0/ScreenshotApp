@@ -19,8 +19,12 @@ class ScreenCaptureWindow: NSWindow {
         self.level = .floating
         self.isOpaque = false
         self.backgroundColor = .clear
+        self.hasShadow = false
         self.ignoresMouseEvents = false
-        self.contentView = ScreenCaptureView()
+        
+        let view = ScreenCaptureView(frame: mainScreen.frame)
+        self.contentView = view
+        
         print("ScreenCaptureWindow initialized with frame: \(mainScreen.frame)")
     }
     

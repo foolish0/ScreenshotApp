@@ -23,30 +23,35 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
         print("Stream callback triggered with type: \(outputType)")
         
-        // 先停止捕获，避免半透明窗口影响截图质量
-        stream.stopCapture { error in
-            if let error = error {
-                print("Failed to stop capture: \(error)")
-            } else {
-                print("Stream stopped")
-                
-                // 在停止捕获后，隐藏截图窗口
-                DispatchQueue.main.async { [weak self] in
-                    self?.captureWindow?.orderOut(nil)
-                    
-                    // 然后处理图像
-                    guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-                        print("No image buffer available")
-                        return
-                    }
+        guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            print("No image buffer available")
+            return
+        }
 
-                    let ciImage = CIImage(cvPixelBuffer: imageBuffer)
-                    let nsImage = NSImage(size: self?.rect.size ?? .zero)
-                    nsImage.addRepresentation(NSCIImageRep(ciImage: ciImage))
-                    
-                    // 显示预览
-                    self?.capturedImage = nsImage
-                    self?.showPreview(image: nsImage)
+        // 在主线程上隐藏截图窗口
+        DispatchQueue.main.async { [weak self] in
+            self?.captureWindow?.orderOut(nil)
+            
+            // 等待窗口完全隐藏后再进行截图
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self = self else { return }
+                
+                // 创建 CIImage
+                let ciImage = CIImage(cvPixelBuffer: imageBuffer)
+                
+                // 创建正确尺寸的图像
+                let nsImage = NSImage(size: self.rect.size)
+                nsImage.addRepresentation(NSCIImageRep(ciImage: ciImage))
+                
+                // 显示预览
+                self.capturedImage = nsImage
+                self.showPreview(image: nsImage)
+                
+                // 停止捕获
+                stream.stopCapture { error in
+                    if let error = error {
+                        print("Failed to stop capture: \(error)")
+                    }
                 }
             }
         }

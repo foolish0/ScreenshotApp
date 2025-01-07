@@ -14,15 +14,19 @@ class ScreenCaptureView: NSView {
     private var currentStream: SCStream? // 保持对 stream 的强引用
     private var outputHandler: CustomStreamOutputHandler? // 保持对 handler 的强引用
     
+    override var isOpaque: Bool {
+        return false // 始终返回 false 表示视图是透明的
+    }
+    
     override init(frame: NSRect) {
-            super.init(frame: frame)
-            print("Initializing ScreenCaptureView")
-            self.wantsLayer = true
-        }
+        super.init(frame: frame)
+        self.wantsLayer = true
+        self.layer?.backgroundColor = .clear
+    }
 
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     override func mouseDown(with event: NSEvent) {
         // 记录起始点
@@ -52,12 +56,29 @@ class ScreenCaptureView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        NSColor(white: 0, alpha: 0.3).setFill()
-        bounds.fill()
-
+        
         if let rect = currentRect {
+            NSGraphicsContext.current?.saveGraphicsState()
+            
+            // 创建遮罩路径
+            let path = NSBezierPath(rect: bounds)
+            path.append(NSBezierPath(rect: rect).reversed)
+            
+            // 设置遮罩区域的颜色
+            NSColor(white: 0, alpha: 0.3).setFill()
+            path.fill()
+            
+            // 绘制选择框边框
             NSColor.white.setStroke()
-            rect.frame(withWidth: 2)
+            let borderPath = NSBezierPath(rect: rect)
+            borderPath.lineWidth = 2
+            borderPath.stroke()
+            
+            NSGraphicsContext.current?.restoreGraphicsState()
+        } else {
+            // 如果没有选择区域，整个窗口显示半透明遮罩
+            NSColor(white: 0, alpha: 0.3).setFill()
+            bounds.fill()
         }
     }
 

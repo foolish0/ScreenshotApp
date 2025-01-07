@@ -11,36 +11,42 @@ import ScreenCaptureKit
 class CustomStreamOutputHandler: NSObject, SCStreamOutput {
     private let rect: NSRect
     private var capturedImage: NSImage?
+    private weak var previewWindow: NSWindow?
+    private weak var captureWindow: NSWindow? // 添加对截图窗口的引用
 
-    init(rect: NSRect) {
+    init(rect: NSRect, captureWindow: NSWindow?) {
         self.rect = rect
+        self.captureWindow = captureWindow
+        super.init()
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
         print("Stream callback triggered with type: \(outputType)")
         
-        guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-            print("No image buffer available")
-            return
-        }
+        // 先停止捕获，避免半透明窗口影响截图质量
+        stream.stopCapture { error in
+            if let error = error {
+                print("Failed to stop capture: \(error)")
+            } else {
+                print("Stream stopped")
+                
+                // 在停止捕获后，隐藏截图窗口
+                DispatchQueue.main.async { [weak self] in
+                    self?.captureWindow?.orderOut(nil)
+                    
+                    // 然后处理图像
+                    guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                        print("No image buffer available")
+                        return
+                    }
 
-        let ciImage = CIImage(cvPixelBuffer: imageBuffer)
-        let nsImage = NSImage(size: rect.size)
-        nsImage.addRepresentation(NSCIImageRep(ciImage: ciImage))
-
-        DispatchQueue.main.async {
-            // 保存捕获的图像到变量
-            self.capturedImage = nsImage
-
-            // 显示预览窗口
-            self.showPreview(image: nsImage)
-            
-            // 停止流
-            stream.stopCapture { error in
-                if let error = error {
-                    print("Failed to stop capture: \(error)")
-                } else {
-                    print("Stream stopped")
+                    let ciImage = CIImage(cvPixelBuffer: imageBuffer)
+                    let nsImage = NSImage(size: self?.rect.size ?? .zero)
+                    nsImage.addRepresentation(NSCIImageRep(ciImage: ciImage))
+                    
+                    // 显示预览
+                    self?.capturedImage = nsImage
+                    self?.showPreview(image: nsImage)
                 }
             }
         }
@@ -56,29 +62,28 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
 
         previewWindow.title = "截图预览"
         previewWindow.level = .floating
-        previewWindow.center() // 窗口居中显示
+        previewWindow.center()
 
-        // 创建图片视图
         let imageView = NSImageView(frame: NSRect(x: 0, y: 40, width: image.size.width, height: image.size.height))
         imageView.image = image
         imageView.imageScaling = .scaleProportionallyUpOrDown
         previewWindow.contentView?.addSubview(imageView)
 
-        // 创建保存按钮
         let saveButton = NSButton(frame: NSRect(x: 10, y: 5, width: 80, height: 30))
         saveButton.title = "保存"
+        saveButton.bezelStyle = .rounded
         saveButton.target = self
         saveButton.action = #selector(saveImage)
         previewWindow.contentView?.addSubview(saveButton)
 
-        // 创建取消按钮
         let cancelButton = NSButton(frame: NSRect(x: 100, y: 5, width: 80, height: 30))
         cancelButton.title = "取消"
+        cancelButton.bezelStyle = .rounded
         cancelButton.target = self
         cancelButton.action = #selector(cancelPreview)
         previewWindow.contentView?.addSubview(cancelButton)
 
-        // 显示窗口
+        self.previewWindow = previewWindow
         previewWindow.makeKeyAndOrderFront(nil)
     }
 
@@ -88,34 +93,26 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
             return
         }
 
-        // 获取桌面路径
-        let desktopPath = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
-        let fileName = "Screenshot-\(Date().timeIntervalSince1970).png"
-        let fileURL = desktopPath.appendingPathComponent(fileName)
-
-        // 创建保存面板
         let savePanel = NSSavePanel()
-        savePanel.directoryURL = desktopPath
-        savePanel.nameFieldStringValue = fileName
-        savePanel.allowedFileTypes = ["png"]
-
-        // 获取主窗口或当前窗口
-        guard let window = NSApp.keyWindow else {
-            print("No key window found for save panel.")
-            return
-        }
-
-        // 显示保存面板
-        DispatchQueue.main.async {
-            savePanel.beginSheetModal(for: window) { result in
-                if result == .OK, let selectedURL = savePanel.url {
+        savePanel.title = "保存截图"
+        savePanel.nameFieldStringValue = "Screenshot-\(Int(Date().timeIntervalSince1970))"
+        savePanel.allowedContentTypes = [.png]
+        savePanel.canCreateDirectories = true
+        
+        guard let window = previewWindow else { return }
+        
+        savePanel.beginSheetModal(for: window) { [weak self] response in
+            if response == .OK, let url = savePanel.url {
+                if let tiffData = image.tiffRepresentation,
+                   let bitmapRep = NSBitmapImageRep(data: tiffData),
+                   let pngData = bitmapRep.representation(using: .png, properties: [:]) {
                     do {
-                        // 保存为 PNG 文件
-                        if let tiffData = image.tiffRepresentation,
-                           let bitmapRep = NSBitmapImageRep(data: tiffData),
-                           let pngData = bitmapRep.representation(using: .png, properties: [:]) {
-                            try pngData.write(to: selectedURL)
-                            print("Image saved to: \(selectedURL.path)")
+                        try pngData.write(to: url)
+                        print("Image saved successfully to: \(url.path)")
+                        
+                        // 保存成功后关闭所有窗口
+                        DispatchQueue.main.async {
+                            self?.closeAllWindows()
                         }
                     } catch {
                         print("Failed to save image: \(error)")
@@ -126,7 +123,16 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
     }
 
     @objc private func cancelPreview() {
-        // 关闭所有相关窗口
-        NSApp.keyWindow?.close()
+        closeAllWindows()
+    }
+    
+    private func closeAllWindows() {
+        DispatchQueue.main.async { [weak self] in
+            // 关闭预览窗口
+            self?.previewWindow?.close()
+            // 关闭截图窗口并退出应用
+            self?.captureWindow?.close()
+            NSApp.terminate(nil)
+        }
     }
 }

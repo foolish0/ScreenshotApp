@@ -120,8 +120,8 @@ class ScreenCaptureView: NSView {
             self.currentStream = stream // 保持强引用
             
             // 创建并保存输出处理器
-            let handler = CustomStreamOutputHandler(rect: rect)
-            self.outputHandler = handler // 保持强引用
+            let handler = CustomStreamOutputHandler(rect: rect, captureWindow: self.window)
+            self.outputHandler = handler
             
             // 添加输出处理器
             print("Adding stream output")

@@ -95,7 +95,7 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
 
         // 保存按钮
         let saveButton = NSButton(frame: NSRect(x: 10, y: 5, width: 80, height: 30))
-        saveButton.title = "保存"
+        saveButton.title = "save"
         saveButton.bezelStyle = .rounded
         saveButton.target = self
         saveButton.action = #selector(saveImage)
@@ -103,7 +103,7 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
 
         // 取消按钮
         let cancelButton = NSButton(frame: NSRect(x: 100, y: 5, width: 80, height: 30))
-        cancelButton.title = "取消"
+        cancelButton.title = "cancel"
         cancelButton.bezelStyle = .rounded
         cancelButton.target = self
         cancelButton.action = #selector(cancelPreview)

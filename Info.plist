@@ -32,5 +32,7 @@
 	<string>需要访问下载文件夹以保存截图。</string>
 	<key>NSDocumentsFolderUsageDescription</key>
 	<string>需要访问文档文件夹以保存截图。</string>
+	<key>LSUIElement</key>
+	<true/>
 </dict>
 </plist>

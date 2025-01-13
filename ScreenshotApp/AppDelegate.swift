@@ -13,20 +13,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         print("Application did finish launching")
         
+        // 确保应用保持运行
+        NSApp.activate(ignoringOtherApps: true)
+        
         // 先设置为 accessory 应用
         NSApp.setActivationPolicy(.accessory)
         
         // 创建状态栏管理器
-        statusBarManager = StatusBarManager()
-        print("Status bar manager created")
+        DispatchQueue.main.async { [weak self] in
+            self?.statusBarManager = StatusBarManager()
+            print("Status bar manager created")
+        }
         
         // 关闭主窗口（如果有的话）
         NSApplication.shared.windows.forEach { window in
             window.close()
         }
-        
-        // 确保应用保持运行
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {

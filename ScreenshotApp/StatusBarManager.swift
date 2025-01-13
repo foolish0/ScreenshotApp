@@ -12,6 +12,9 @@ class StatusBarManager {
     let statusItem: NSStatusItem
     private var captureWindow: ScreenCaptureWindow?
     
+    // 添加一个强引用数组来保持窗口存活
+    private var activeWindows: [NSWindow] = []
+    
     init() {
         // 使用固定长度
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -54,13 +57,28 @@ class StatusBarManager {
     
     @objc private func startCapture() {
         print("Start capture triggered")
-        captureWindow?.close()
-        captureWindow = ScreenCaptureWindow()
-        captureWindow?.makeKeyAndOrderFront(nil)
+        // 如果已经有截图窗口，先关闭它
+        if let existingWindow = captureWindow {
+            existingWindow.close()
+            captureWindow = nil
+            // 从活动窗口数组中移除
+            activeWindows.removeAll { $0 === existingWindow }
+        }
+        
+        // 创建新的截图窗口
+        let newWindow = ScreenCaptureWindow()
+        captureWindow = newWindow
+        // 添加到活动窗口数组
+        activeWindows.append(newWindow)
+        newWindow.makeKeyAndOrderFront(nil)
     }
     
     @objc private func quit() {
         print("Quit triggered")
+        // 清理所有窗口
+        activeWindows.forEach { $0.close() }
+        activeWindows.removeAll()
+        captureWindow = nil
         NSApplication.shared.terminate(nil)
     }
 } 

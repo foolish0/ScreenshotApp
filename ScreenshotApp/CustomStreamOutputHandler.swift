@@ -12,8 +12,13 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
     private let rect: NSRect
     private var capturedImage: NSImage?
     private weak var previewWindow: NSWindow?
-    private weak var captureWindow: NSWindow? // 添加对截图窗口的引用
-
+    private weak var captureWindow: NSWindow?
+    private weak var stream: SCStream?
+    private var isStreamStopped = false
+    
+    // 添加一个强引用来保持预览窗口存活
+    private var retainedPreviewWindow: NSWindow?
+    
     init(rect: NSRect, captureWindow: NSWindow?) {
         self.rect = rect
         self.captureWindow = captureWindow
@@ -61,7 +66,7 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
         // 创建无标题栏的窗口
         let previewWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height + 40),
-            styleMask: [.borderless],
+            styleMask: [.borderless, .titled],
             backing: .buffered,
             defer: false
         )
@@ -70,6 +75,8 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
         previewWindow.level = .floating
         previewWindow.center()
         previewWindow.isMovableByWindowBackground = true
+        previewWindow.titlebarAppearsTransparent = true
+        previewWindow.titleVisibility = .hidden
 
         // 创建一个完全可拖动的自定义视图
         class DraggableContainerView: NSView {
@@ -111,9 +118,50 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
 
         previewWindow.contentView = containerView
         self.previewWindow = previewWindow
+        // 保持强引用
+        self.retainedPreviewWindow = previewWindow
         previewWindow.makeKeyAndOrderFront(nil)
     }
 
+    private func closeAllWindows() {
+        DispatchQueue.main.async { [weak self] in
+            // 停止捕获流
+            if let stream = self?.stream, !self!.isStreamStopped {
+                self?.isStreamStopped = true
+                stream.stopCapture { error in
+                    if let error = error {
+                        print("Failed to stop capture: \(error)")
+                    }
+                }
+            }
+            
+            // 关闭预览窗口
+            if let previewWindow = self?.previewWindow {
+                previewWindow.orderOut(nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    previewWindow.close()
+                    self?.previewWindow = nil
+                    // 清理强引用
+                    self?.retainedPreviewWindow = nil
+                }
+            }
+            
+            // 关闭截图窗口
+            if let captureWindow = self?.captureWindow {
+                captureWindow.orderOut(nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    captureWindow.close()
+                    self?.captureWindow = nil
+                }
+            }
+            
+            // 清理引用
+            self?.stream = nil
+            self?.capturedImage = nil
+            self?.isStreamStopped = false
+        }
+    }
+    
     @objc private func saveImage() {
         guard let image = capturedImage else {
             print("No image captured to save")
@@ -137,7 +185,7 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
                         try pngData.write(to: url)
                         print("Image saved successfully to: \(url.path)")
                         
-                        // 保存成功后关闭所有窗口
+                        // 保存成功后只关闭相关窗口
                         DispatchQueue.main.async {
                             self?.closeAllWindows()
                         }
@@ -151,15 +199,5 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
 
     @objc private func cancelPreview() {
         closeAllWindows()
-    }
-    
-    private func closeAllWindows() {
-        DispatchQueue.main.async { [weak self] in
-            // 关闭预览窗口
-            self?.previewWindow?.close()
-            // 关闭截图窗口并退出应用
-            self?.captureWindow?.close()
-            NSApp.terminate(nil)
-        }
     }
 }

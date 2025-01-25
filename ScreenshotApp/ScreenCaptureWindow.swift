@@ -38,6 +38,5 @@ class ScreenCaptureWindow: NSWindow {
     
     override func close() {
         super.close()
-        NSApp.terminate(nil) // 应用退出
     }
 }

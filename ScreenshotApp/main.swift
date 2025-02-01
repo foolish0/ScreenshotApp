@@ -1,12 +1,10 @@
 import Cocoa
 
-// 创建应用和委托
-let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
+// 全局持有 AppDelegate 的实例，确保在整个应用生命周期中不会被释放
+let appDelegate = AppDelegate()
 
-// 激活应用
-app.activate(ignoringOtherApps: true)
+let app = NSApplication.shared
+app.delegate = appDelegate
 
 // 运行应用
-_ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv) 
+_ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)

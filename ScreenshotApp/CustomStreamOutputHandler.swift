@@ -26,6 +26,7 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
+        self.stream = stream
         print("Stream callback triggered with type: \(outputType)")
         
         guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -34,28 +35,32 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
         }
 
         // 在主线程上隐藏截图窗口
-        DispatchQueue.main.async { [weak self] in
-            self?.captureWindow?.orderOut(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let strongSelf = self, let captureWindow = strongSelf.captureWindow else { return }
+            captureWindow.orderOut(nil)
             
             // 等待窗口完全隐藏后再进行截图
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                guard let self = self else { return }
+                guard let strongSelf = self else { return }
                 
                 // 创建 CIImage
                 let ciImage = CIImage(cvPixelBuffer: imageBuffer)
                 
                 // 创建正确尺寸的图像
-                let nsImage = NSImage(size: self.rect.size)
+                let nsImage = NSImage(size: strongSelf.rect.size)
                 nsImage.addRepresentation(NSCIImageRep(ciImage: ciImage))
                 
                 // 显示预览
-                self.capturedImage = nsImage
-                self.showPreview(image: nsImage)
+                strongSelf.capturedImage = nsImage
+                strongSelf.showPreview(image: nsImage)
                 
-                // 停止捕获
-                stream.stopCapture { error in
-                    if let error = error {
-                        print("Failed to stop capture: \(error)")
+                // 停止捕获（仅在未停止的情况下调用）
+                if !strongSelf.isStreamStopped {
+                    strongSelf.isStreamStopped = true
+                    stream.stopCapture { error in
+                        if let error = error {
+                            print("Failed to stop capture: \(error)")
+                        }
                     }
                 }
             }
@@ -63,6 +68,12 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
     }
 
     private func showPreview(image: NSImage) {
+        if let existingWindow = self.previewWindow {
+            existingWindow.orderOut(nil)
+            existingWindow.close()
+            self.previewWindow = nil
+            self.retainedPreviewWindow = nil
+        }
         // 创建无标题栏的窗口
         let previewWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height + 40),
@@ -83,9 +94,7 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
             override var mouseDownCanMoveWindow: Bool { true }
             
             override func mouseDown(with event: NSEvent) {
-                if let window = self.window {
-                    window.performDrag(with: event)
-                }
+                self.window?.performDrag(with: event)
             }
         }
 
@@ -125,9 +134,10 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
 
     private func closeAllWindows() {
         DispatchQueue.main.async { [weak self] in
-            // 停止捕获流
-            if let stream = self?.stream, !self!.isStreamStopped {
-                self?.isStreamStopped = true
+            guard let strongSelf = self else { return }
+            // 停止捕获流（如果还没有停止）
+            if let stream = strongSelf.stream, !strongSelf.isStreamStopped {
+                strongSelf.isStreamStopped = true
                 stream.stopCapture { error in
                     if let error = error {
                         print("Failed to stop capture: \(error)")
@@ -136,29 +146,31 @@ class CustomStreamOutputHandler: NSObject, SCStreamOutput {
             }
             
             // 关闭预览窗口
-            if let previewWindow = self?.previewWindow {
+            if let previewWindow = strongSelf.previewWindow {
                 previewWindow.orderOut(nil)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    guard let strongSelf = self else { return }
                     previewWindow.close()
-                    self?.previewWindow = nil
+                    strongSelf.previewWindow = nil
                     // 清理强引用
-                    self?.retainedPreviewWindow = nil
+                    strongSelf.retainedPreviewWindow = nil
                 }
             }
             
             // 关闭截图窗口
-            if let captureWindow = self?.captureWindow {
+            if let captureWindow = strongSelf.captureWindow {
                 captureWindow.orderOut(nil)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    guard let strongSelf = self else { return }
                     captureWindow.close()
-                    self?.captureWindow = nil
+                    strongSelf.captureWindow = nil
                 }
             }
             
             // 清理引用
-            self?.stream = nil
-            self?.capturedImage = nil
-            self?.isStreamStopped = false
+            strongSelf.stream = nil
+            strongSelf.capturedImage = nil
+            strongSelf.isStreamStopped = false
         }
     }
     

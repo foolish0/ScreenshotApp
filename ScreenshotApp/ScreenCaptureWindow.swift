@@ -36,7 +36,7 @@ class ScreenCaptureWindow: NSWindow {
         return true
     }
     
-    override func close() {
-        super.close()
+    deinit {
+        print("ScreenCaptureWindow deinitialized")
     }
 }

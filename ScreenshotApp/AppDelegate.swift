@@ -13,15 +13,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         print("Application did finish launching")
         
-        // 确保应用保持运行
-        NSApp.activate(ignoringOtherApps: true)
-        
         // 先设置为 accessory 应用
-        NSApp.setActivationPolicy(.accessory)
+//        NSApp.setActivationPolicy(.accessory)
+        // 确保应用保持运行
+//        NSApp.activate(ignoringOtherApps: true)
         
-        // 创建状态栏管理器
-        DispatchQueue.main.async { [weak self] in
-            self?.statusBarManager = StatusBarManager()
+        // 创建状态栏管理器（不使用 weak 捕获，因为 AppDelegate 应该长期存在）
+        DispatchQueue.main.async {
+            self.statusBarManager = StatusBarManager()
             print("Status bar manager created")
         }
         
